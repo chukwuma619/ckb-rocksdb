@@ -1,9 +1,10 @@
 extern crate ckb_rocksdb as rocksdb;
 
 use crate::rocksdb::{
-    MergeOperands, OptimisticTransactionDB, OptimisticTransactionOptions, Options, TemporaryDBPath,
-    WriteBatch, WriteOptions, prelude::*,
+    MergeOperands, OptimisticTransaction, OptimisticTransactionDB, OptimisticTransactionOptions,
+    Options, TemporaryDBPath, WriteBatch, WriteOptions, prelude::*,
 };
+use std::sync::Arc;
 use std::thread;
 
 #[test]
@@ -316,6 +317,54 @@ fn sync_transaction_test() {
             handler.join().unwrap();
         });
     }
+}
+
+struct OwnedTransaction {
+    db: Arc<OptimisticTransactionDB>,
+    txn: OptimisticTransaction<'static>,
+}
+
+#[test]
+fn owned_transaction_keeps_db_alive() {
+    let n = TemporaryDBPath::new();
+    {
+        let mut opts = Options::default();
+        opts.create_if_missing(true);
+        opts.create_missing_column_families(true);
+        let db = Arc::new(OptimisticTransactionDB::open_cf(&opts, &n, ["cf"]).unwrap());
+        let mut txn_opts = OptimisticTransactionOptions::default();
+        txn_opts.set_snapshot(true);
+        let owned = OwnedTransaction {
+            db: Arc::clone(&db),
+            txn: db.transaction_owned(&WriteOptions::default(), &txn_opts),
+        };
+        drop(db);
+
+        {
+            let cf = owned.db.cf_handle("cf").unwrap();
+            owned.txn.put_cf(cf, b"k1", b"v1").unwrap();
+            assert_eq!(
+                &*owned.txn.get_pinned_cf(cf, b"k1").unwrap().unwrap(),
+                b"v1"
+            );
+            let snapshot = owned.txn.snapshot();
+            assert_eq!(&*snapshot.get_cf(cf, b"k1").unwrap().unwrap(), b"v1");
+        }
+        owned.txn.put(b"k0", b"v0").unwrap();
+
+        let OwnedTransaction { db, txn } = owned;
+        drop(db);
+        txn.commit().unwrap();
+        assert_eq!(&*txn.get(b"k0").unwrap().unwrap(), b"v0");
+    }
+}
+
+// FIXME: windows
+#[cfg(not(target_os = "windows"))]
+#[test]
+fn test_optimistic_transaction_misuse_fails_to_compile() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/fail/optimistic_transaction/*.rs");
 }
 
 #[test]

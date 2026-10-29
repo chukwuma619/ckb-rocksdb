@@ -6,11 +6,11 @@ use crate::{
     ops::*,
 };
 use libc::{c_char, c_uchar, c_void, size_t};
-use std::marker::PhantomData;
-use std::ptr;
+use std::{marker::PhantomData, ptr, sync::Arc};
 
 pub struct OptimisticTransaction<'db> {
     inner: *mut ffi::rocksdb_transaction_t,
+    _owner: Option<Arc<OptimisticTransactionDB>>,
     _db: PhantomData<&'db OptimisticTransactionDB>,
 }
 
@@ -20,6 +20,18 @@ impl<'db> OptimisticTransaction<'db> {
     pub(crate) fn new(inner: *mut ffi::rocksdb_transaction_t) -> Self {
         Self {
             inner,
+            _owner: None,
+            _db: PhantomData,
+        }
+    }
+
+    pub(crate) fn with_owner(
+        inner: *mut ffi::rocksdb_transaction_t,
+        owner: Arc<OptimisticTransactionDB>,
+    ) -> Self {
+        Self {
+            inner,
+            _owner: Some(owner),
             _db: PhantomData,
         }
     }
@@ -50,7 +62,7 @@ impl<'db> OptimisticTransaction<'db> {
     }
 
     /// Get Snapshot
-    pub fn snapshot(&'db self) -> OptimisticTransactionSnapshot<'db> {
+    pub fn snapshot(&self) -> OptimisticTransactionSnapshot<'_> {
         unsafe {
             let snapshot = ffi::rocksdb_transaction_get_snapshot(self.inner);
             OptimisticTransactionSnapshot {
@@ -458,8 +470,6 @@ pub struct OptimisticTransactionSnapshot<'a> {
     txn: &'a OptimisticTransaction<'a>,
     inner: *const ffi::rocksdb_snapshot_t,
 }
-
-unsafe impl Send for OptimisticTransactionSnapshot<'_> {}
 
 impl ConstHandle<ffi::rocksdb_snapshot_t> for OptimisticTransactionSnapshot<'_> {
     fn const_handle(&self) -> *const ffi::rocksdb_snapshot_t {
