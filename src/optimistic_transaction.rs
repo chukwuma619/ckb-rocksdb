@@ -1,4 +1,5 @@
 use crate::ffi;
+use crate::optimistic_transaction_db::OptimisticTransactionDB;
 use crate::{
     ColumnFamily, DBPinnableSlice, DBRawIterator, DBVector, Error, ReadOptions, ffi_util,
     handle::{ConstHandle, Handle},
@@ -8,16 +9,19 @@ use libc::{c_char, c_uchar, c_void, size_t};
 use std::marker::PhantomData;
 use std::ptr;
 
-pub struct OptimisticTransaction {
+pub struct OptimisticTransaction<'db> {
     inner: *mut ffi::rocksdb_transaction_t,
+    _db: PhantomData<&'db OptimisticTransactionDB>,
 }
 
-unsafe impl Send for OptimisticTransaction {}
-unsafe impl Sync for OptimisticTransaction {}
+unsafe impl Send for OptimisticTransaction<'_> {}
 
-impl OptimisticTransaction {
-    pub(crate) fn new(inner: *mut ffi::rocksdb_transaction_t) -> OptimisticTransaction {
-        OptimisticTransaction { inner }
+impl<'db> OptimisticTransaction<'db> {
+    pub(crate) fn new(inner: *mut ffi::rocksdb_transaction_t) -> Self {
+        Self {
+            inner,
+            _db: PhantomData,
+        }
     }
 
     /// commits a transaction
@@ -46,7 +50,7 @@ impl OptimisticTransaction {
     }
 
     /// Get Snapshot
-    pub fn snapshot(&self) -> OptimisticTransactionSnapshot<'_> {
+    pub fn snapshot(&'db self) -> OptimisticTransactionSnapshot<'db> {
         unsafe {
             let snapshot = ffi::rocksdb_transaction_get_snapshot(self.inner);
             OptimisticTransactionSnapshot {
@@ -133,7 +137,7 @@ impl OptimisticTransaction {
     }
 }
 
-impl Drop for OptimisticTransaction {
+impl Drop for OptimisticTransaction<'_> {
     fn drop(&mut self) {
         unsafe {
             ffi::rocksdb_transaction_destroy(self.inner);
@@ -141,15 +145,15 @@ impl Drop for OptimisticTransaction {
     }
 }
 
-impl Handle<ffi::rocksdb_transaction_t> for OptimisticTransaction {
+impl Handle<ffi::rocksdb_transaction_t> for OptimisticTransaction<'_> {
     fn handle(&self) -> *mut ffi::rocksdb_transaction_t {
         self.inner
     }
 }
 
-impl Read for OptimisticTransaction {}
+impl Read for OptimisticTransaction<'_> {}
 
-impl GetCF<ReadOptions> for OptimisticTransaction {
+impl GetCF<ReadOptions> for OptimisticTransaction<'_> {
     fn get_cf_full<K: AsRef<[u8]>>(
         &self,
         cf: Option<&ColumnFamily>,
@@ -194,7 +198,7 @@ impl GetCF<ReadOptions> for OptimisticTransaction {
     }
 }
 
-impl MultiGet<ReadOptions> for OptimisticTransaction {
+impl MultiGet<ReadOptions> for OptimisticTransaction<'_> {
     fn multi_get_full<K, I>(
         &self,
         keys: I,
@@ -243,7 +247,7 @@ impl MultiGet<ReadOptions> for OptimisticTransaction {
     }
 }
 
-impl MultiGetCF<ReadOptions> for OptimisticTransaction {
+impl MultiGetCF<ReadOptions> for OptimisticTransaction<'_> {
     fn multi_get_cf_full<'a, K, I>(
         &self,
         keys: I,
@@ -300,7 +304,7 @@ impl MultiGetCF<ReadOptions> for OptimisticTransaction {
     }
 }
 
-impl Iterate for OptimisticTransaction {
+impl Iterate for OptimisticTransaction<'_> {
     fn get_raw_iter<'a: 'b, 'b>(&'a self, readopts: &ReadOptions) -> DBRawIterator<'b> {
         unsafe {
             DBRawIterator {
@@ -311,7 +315,7 @@ impl Iterate for OptimisticTransaction {
     }
 }
 
-impl IterateCF for OptimisticTransaction {
+impl IterateCF for OptimisticTransaction<'_> {
     fn get_raw_iter_cf<'a: 'b, 'b>(
         &'a self,
         cf_handle: &ColumnFamily,
@@ -330,7 +334,7 @@ impl IterateCF for OptimisticTransaction {
     }
 }
 
-impl PutCF<()> for OptimisticTransaction {
+impl PutCF<()> for OptimisticTransaction<'_> {
     fn put_cf_full<K, V>(
         &self,
         cf: Option<&ColumnFamily>,
@@ -373,7 +377,7 @@ impl PutCF<()> for OptimisticTransaction {
     }
 }
 
-impl MergeCF<()> for OptimisticTransaction {
+impl MergeCF<()> for OptimisticTransaction<'_> {
     fn merge_cf_full<K, V>(
         &self,
         cf: Option<&ColumnFamily>,
@@ -416,7 +420,7 @@ impl MergeCF<()> for OptimisticTransaction {
     }
 }
 
-impl DeleteCF<()> for OptimisticTransaction {
+impl DeleteCF<()> for OptimisticTransaction<'_> {
     fn delete_cf_full<K>(
         &self,
         cf: Option<&ColumnFamily>,
@@ -451,12 +455,11 @@ impl DeleteCF<()> for OptimisticTransaction {
 }
 
 pub struct OptimisticTransactionSnapshot<'a> {
-    txn: &'a OptimisticTransaction,
+    txn: &'a OptimisticTransaction<'a>,
     inner: *const ffi::rocksdb_snapshot_t,
 }
 
 unsafe impl Send for OptimisticTransactionSnapshot<'_> {}
-unsafe impl Sync for OptimisticTransactionSnapshot<'_> {}
 
 impl ConstHandle<ffi::rocksdb_snapshot_t> for OptimisticTransactionSnapshot<'_> {
     fn const_handle(&self) -> *const ffi::rocksdb_snapshot_t {
@@ -539,7 +542,7 @@ impl IterateCF for OptimisticTransactionSnapshot<'_> {
     }
 }
 
-impl<'a> GetPinnedCF<'a> for OptimisticTransaction {
+impl<'a> GetPinnedCF<'a> for OptimisticTransaction<'a> {
     type ColumnFamily = &'a ColumnFamily;
     type ReadOptions = &'a ReadOptions;
 

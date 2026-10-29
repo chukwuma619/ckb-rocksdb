@@ -124,7 +124,7 @@ impl OptimisticTransactionDB {
         &self,
         write_options: &WriteOptions,
         tx_options: &OptimisticTransactionOptions,
-    ) -> OptimisticTransaction {
+    ) -> OptimisticTransaction<'_> {
         unsafe {
             let inner = ffi::rocksdb_optimistictransaction_begin(
                 self.inner,
@@ -136,7 +136,7 @@ impl OptimisticTransactionDB {
         }
     }
 
-    pub fn transaction_default(&self) -> OptimisticTransaction {
+    pub fn transaction_default(&self) -> OptimisticTransaction<'_> {
         let write_options = WriteOptions::default();
         let transaction_options = OptimisticTransactionOptions::default();
         self.transaction(&write_options, &transaction_options)
