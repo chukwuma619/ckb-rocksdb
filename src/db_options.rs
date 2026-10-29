@@ -364,6 +364,8 @@ pub struct ReadOptions {
     option_set_prefix_same_as_start: Option<bool>,
     option_set_total_order_seek: Option<bool>,
     option_set_readahead_size: Option<usize>,
+    option_set_async_io: Option<bool>,
+    snapshot: *const ffi::rocksdb_snapshot_t,
     inner: *mut ffi::rocksdb_readoptions_t,
 }
 
@@ -3157,9 +3159,11 @@ impl ReadOptions {
     where
         T: ConstHandle<ffi::rocksdb_snapshot_t>,
     {
+        let snapshot = snapshot.const_handle();
         unsafe {
-            ffi::rocksdb_readoptions_set_snapshot(self.inner, snapshot.const_handle());
+            ffi::rocksdb_readoptions_set_snapshot(self.inner, snapshot);
         }
+        self.snapshot = snapshot;
     }
 
     /// Sets the upper bound for an iterator.
@@ -3181,7 +3185,7 @@ impl ReadOptions {
         self.option_set_iterate_lower_bound = Some(key.as_ref().to_vec());
         let key = self.option_set_iterate_lower_bound.as_ref().unwrap();
         unsafe {
-            ffi::rocksdb_readoptions_set_iterate_upper_bound(
+            ffi::rocksdb_readoptions_set_iterate_lower_bound(
                 self.inner,
                 key.as_ptr() as *const c_char,
                 key.len() as size_t,
@@ -3241,6 +3245,7 @@ impl ReadOptions {
         unsafe {
             ffi::rocksdb_readoptions_set_async_io(self.inner, c_uchar::from(v));
         }
+        self.option_set_async_io = Some(v);
     }
 
     pub fn input_or_default(
@@ -3281,6 +3286,8 @@ impl Default for ReadOptions {
                 option_set_prefix_same_as_start: None,
                 option_set_total_order_seek: None,
                 option_set_readahead_size: None,
+                option_set_async_io: None,
+                snapshot: std::ptr::null(),
                 inner: ffi::rocksdb_readoptions_create(),
             }
         }
@@ -3308,6 +3315,15 @@ impl Clone for ReadOptions {
         if let Some(set_readahead_size) = self.option_set_readahead_size {
             ops.set_readahead_size(set_readahead_size)
         };
+        if let Some(async_io) = self.option_set_async_io {
+            ops.set_async_io(async_io);
+        }
+        if !self.snapshot.is_null() {
+            unsafe {
+                ffi::rocksdb_readoptions_set_snapshot(ops.inner, self.snapshot);
+            }
+            ops.snapshot = self.snapshot;
+        }
         ops
     }
 }
