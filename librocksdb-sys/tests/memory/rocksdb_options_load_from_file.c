@@ -8,14 +8,18 @@ int main (int argc, char *argv[])
     rocksdb_env_t* env = rocksdb_create_default_env();
     bool ignore_unknown_options = false;
     rocksdb_cache_t* cache = rocksdb_cache_create_lru(1000);
-    char **errptr;
+    char* err = NULL;
 
     rocksdb_fulloptions_t fullopts = rocksdb_options_load_from_file(
         config_file,
         env,
         ignore_unknown_options,
         cache,
-        errptr);
+        &err);
+
+    if (err != NULL) {
+        rocksdb_free(err);
+    }
 
     rocksdb_env_destroy(env);
     rocksdb_cache_destroy(cache);
