@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 #include "patches/rocksdb.h"
 
 int main (int argc, char *argv[])
@@ -17,12 +19,14 @@ int main (int argc, char *argv[])
         cache,
         &err);
 
-    if (err != NULL) {
-        rocksdb_free(err);
-    }
-
     rocksdb_env_destroy(env);
     rocksdb_cache_destroy(cache);
+
+    if (err != NULL) {
+        fprintf(stderr, "failed to load options: %s\n", err);
+        rocksdb_free(err);
+        return 1;
+    }
 
     rocksdb_column_family_descriptors_destroy(fullopts.cf_descs);
     rocksdb_options_destroy(fullopts.db_opts);
