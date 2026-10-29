@@ -219,6 +219,12 @@ impl GetColumnFamilys for DB {
     }
 }
 
+impl RetainColumnFamilyOptions for DB {
+    fn retain_outlive(&mut self, outlive: OptionsMustOutliveDB) {
+        self._outlive.push(outlive);
+    }
+}
+
 #[test]
 fn test_db_vector() {
     use crate::prelude::*;

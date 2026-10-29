@@ -57,6 +57,7 @@ pub use self::checkpoint::CreateCheckpointObject;
 pub use self::columnfamily::CreateCF;
 pub use self::columnfamily::DropCF;
 pub use self::columnfamily::GetColumnFamilys;
+pub(crate) use self::columnfamily::RetainColumnFamilyOptions;
 pub use self::compact::{CompactRange, CompactRangeCF};
 pub use self::flush::Flush;
 pub use self::iter::{Iterate, IterateCF};

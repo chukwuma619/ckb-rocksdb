@@ -46,7 +46,8 @@ impl DBWithTTL {
 
             self.get_mut_cfs()
                 .insert(name.as_ref().to_string(), ColumnFamily::new(cf_handle));
-        };
+        }
+        self._outlive.push(opts.outlive.clone());
         Ok(())
     }
 }
@@ -215,6 +216,12 @@ impl ops::GetColumnFamilys for DBWithTTL {
     }
     fn get_mut_cfs(&mut self) -> &mut BTreeMap<String, ColumnFamily> {
         &mut self.cfs
+    }
+}
+
+impl ops::RetainColumnFamilyOptions for DBWithTTL {
+    fn retain_outlive(&mut self, outlive: OptionsMustOutliveDB) {
+        self._outlive.push(outlive);
     }
 }
 

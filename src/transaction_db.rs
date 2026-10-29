@@ -591,7 +591,8 @@ impl CreateCF for TransactionDB {
 
             self.get_mut_cfs()
                 .insert(name.as_ref().to_string(), ColumnFamily::new(cf_handle));
-        };
+        }
+        self._outlive.push(opts.outlive.clone());
         Ok(())
     }
 }

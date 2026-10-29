@@ -1,5 +1,6 @@
 use crate::ffi;
 
+use crate::db_options::OptionsMustOutliveDB;
 use crate::{ColumnFamily, Error, Options, ffi_util::to_cstring, handle::Handle};
 
 use std::collections::BTreeMap;
@@ -19,13 +20,17 @@ pub trait CreateCF {
     fn create_cf<N: AsRef<str>>(&mut self, name: N, opts: &Options) -> Result<(), Error>;
 }
 
+pub(crate) trait RetainColumnFamilyOptions {
+    fn retain_outlive(&mut self, outlive: OptionsMustOutliveDB);
+}
+
 pub trait DropCF {
     fn drop_cf(&mut self, name: &str) -> Result<(), Error>;
 }
 
 impl<T> CreateCF for T
 where
-    T: Handle<ffi::rocksdb_t> + super::Write + GetColumnFamilys,
+    T: Handle<ffi::rocksdb_t> + super::Write + GetColumnFamilys + RetainColumnFamilyOptions,
 {
     fn create_cf<N: AsRef<str>>(&mut self, name: N, opts: &Options) -> Result<(), Error> {
         let cname = to_cstring(
@@ -41,7 +46,8 @@ where
 
             self.get_mut_cfs()
                 .insert(name.as_ref().to_string(), ColumnFamily::new(cf_handle));
-        };
+        }
+        self.retain_outlive(opts.outlive.clone());
         Ok(())
     }
 }

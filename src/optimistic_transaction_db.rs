@@ -100,6 +100,12 @@ impl GetColumnFamilys for OptimisticTransactionDB {
     }
 }
 
+impl RetainColumnFamilyOptions for OptimisticTransactionDB {
+    fn retain_outlive(&mut self, outlive: OptionsMustOutliveDB) {
+        self._outlive.push(outlive);
+    }
+}
+
 impl OptimisticTransactionDB {
     pub fn path(&self) -> &Path {
         self.path.as_path()
