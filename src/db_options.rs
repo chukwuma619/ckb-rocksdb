@@ -364,8 +364,6 @@ pub struct ReadOptions {
     option_set_prefix_same_as_start: Option<bool>,
     option_set_total_order_seek: Option<bool>,
     option_set_readahead_size: Option<usize>,
-    option_set_async_io: Option<bool>,
-    snapshot: *const ffi::rocksdb_snapshot_t,
     inner: *mut ffi::rocksdb_readoptions_t,
 }
 
@@ -3159,11 +3157,9 @@ impl ReadOptions {
     where
         T: ConstHandle<ffi::rocksdb_snapshot_t>,
     {
-        let snapshot = snapshot.const_handle();
         unsafe {
-            ffi::rocksdb_readoptions_set_snapshot(self.inner, snapshot);
+            ffi::rocksdb_readoptions_set_snapshot(self.inner, snapshot.const_handle());
         }
-        self.snapshot = snapshot;
     }
 
     /// Sets the upper bound for an iterator.
@@ -3245,7 +3241,6 @@ impl ReadOptions {
         unsafe {
             ffi::rocksdb_readoptions_set_async_io(self.inner, c_uchar::from(v));
         }
-        self.option_set_async_io = Some(v);
     }
 
     pub fn input_or_default(
@@ -3286,8 +3281,6 @@ impl Default for ReadOptions {
                 option_set_prefix_same_as_start: None,
                 option_set_total_order_seek: None,
                 option_set_readahead_size: None,
-                option_set_async_io: None,
-                snapshot: std::ptr::null(),
                 inner: ffi::rocksdb_readoptions_create(),
             }
         }
@@ -3296,34 +3289,22 @@ impl Default for ReadOptions {
 
 impl Clone for ReadOptions {
     fn clone(&self) -> ReadOptions {
-        let mut ops = ReadOptions::default();
-        if let Some(fill_cache) = self.option_fill_cache {
-            ops.fill_cache(fill_cache);
+        let mut ops = ReadOptions {
+            option_fill_cache: self.option_fill_cache,
+            option_set_iterate_upper_bound: None,
+            option_set_iterate_lower_bound: None,
+            option_set_prefix_same_as_start: self.option_set_prefix_same_as_start,
+            option_set_total_order_seek: self.option_set_total_order_seek,
+            option_set_readahead_size: self.option_set_readahead_size,
+            inner: unsafe { ffi::rocksdb_readoptions_clone(self.inner) },
         };
+        // The copied bounds still point into self's buffers until they are set again.
         if let Some(set_iterate_upper_bound) = &self.option_set_iterate_upper_bound {
             ops.set_iterate_upper_bound(set_iterate_upper_bound);
         };
         if let Some(set_iterate_lower_bound) = &self.option_set_iterate_lower_bound {
             ops.set_iterate_lower_bound(set_iterate_lower_bound);
         };
-        if let Some(set_prefix_same_as_start) = self.option_set_prefix_same_as_start {
-            ops.set_prefix_same_as_start(set_prefix_same_as_start);
-        };
-        if let Some(set_total_order_seek) = self.option_set_total_order_seek {
-            ops.set_total_order_seek(set_total_order_seek);
-        };
-        if let Some(set_readahead_size) = self.option_set_readahead_size {
-            ops.set_readahead_size(set_readahead_size)
-        };
-        if let Some(async_io) = self.option_set_async_io {
-            ops.set_async_io(async_io);
-        }
-        if !self.snapshot.is_null() {
-            unsafe {
-                ffi::rocksdb_readoptions_set_snapshot(ops.inner, self.snapshot);
-            }
-            ops.snapshot = self.snapshot;
-        }
         ops
     }
 }
